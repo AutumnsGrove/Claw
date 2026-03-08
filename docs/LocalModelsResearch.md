@@ -9,8 +9,9 @@
 
 | Role | Model | Size (Q4) | Why |
 |------|-------|-----------|-----|
-| **Primary** | Qwen3-30B-A3B | ~16 GB | MoE, only 3B active params, excellent tool calling, fits easily |
-| **Alt Primary** | LFM2-24B-A2B | ~14.4 GB | 2x faster CPU decode than Qwen3, native tool calling, only 2B active |
+| **Primary** | Qwen3.5-35B-A3B | ~18 GB | MoE, 3B active, outperforms prev-gen 235B model, newest architecture |
+| **Alt Primary** | Qwen3-30B-A3B | ~16 GB | MoE, only 3B active params, excellent tool calling, proven track record |
+| **Speed Primary** | LFM2-24B-A2B | ~14.4 GB | 2x faster CPU decode than Qwen3, native tool calling, only 2B active |
 | **Fallback** | Qwen3.5-9B | ~6.6 GB | Best small model for its size, multimodal, great for light tasks |
 | **Ultralight** | LFM2.5-1.2B-Instruct | ~0.7 GB | Fastest possible, good tool calling at 1B scale, RL-trained |
 
@@ -24,33 +25,62 @@ OpenClaw natively supports local models. No hacks needed.
 
 ### How It Works
 
-- OpenClaw connects to Ollama via its **OpenAI-compatible API** at `http://127.0.0.1:11434`
+- OpenClaw has a **native Ollama integration** documented at [docs.openclaw.ai/providers/ollama](https://docs.openclaw.ai/providers/ollama)
 - Ollama announced official OpenClaw integration on **February 1, 2026** with `ollama launch openclaw`
 - Model references use the format: `ollama/<model-name>` (e.g., `ollama/qwen3:30b-a3b`)
+- Auto-discovery: set `OLLAMA_API_KEY="ollama-local"` and OpenClaw finds tool-capable models automatically
 
 ### Configuration
 
-In `openclaw.json`, add Ollama as a custom provider:
+Three setup methods (simplest first):
 
-```json
+**Method 1 — Environment Variable (auto-discovery):**
+```bash
+export OLLAMA_API_KEY="ollama-local"
+# OpenClaw auto-discovers tool-capable models from http://127.0.0.1:11434
+```
+
+**Method 2 — Native Ollama provider in `openclaw.json`:**
+
+> **IMPORTANT:** For native Ollama integration, do NOT use `/v1` suffix on the URL.
+> Use `http://127.0.0.1:11434` (not `http://127.0.0.1:11434/v1`) — the `/v1` path breaks tool calling.
+
+```json5
 {
-  "models": {
-    "providers": [
-      {
-        "name": "ollama",
-        "api": "openai-completions",
-        "baseUrl": "http://127.0.0.1:11434/v1"
-      }
-    ]
-  },
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "ollama/qwen3:30b-a3b",
-        "heartbeat": "ollama/qwen3.5:9b",
-        "fallbacks": [
-          "openrouter/google/gemini-2.5-flash-lite"
+  models: {
+    providers: {
+      ollama: {
+        baseUrl: "http://127.0.0.1:11434",
+        apiKey: "ollama-local",
+        models: [
+          { id: "qwen3:30b-a3b", name: "Qwen3 30B-A3B" },
+          { id: "qwen3.5:9b", name: "Qwen3.5 9B" }
         ]
+      }
+    }
+  },
+  agents: {
+    defaults: {
+      model: {
+        primary: "ollama/qwen3:30b-a3b",
+        heartbeat: "ollama/qwen3.5:9b",
+        fallbacks: ["openrouter/google/gemini-2.5-flash-lite"]
+      }
+    }
+  }
+}
+```
+
+**Method 3 — OpenAI-compatible mode** (if native mode has issues):
+```json5
+{
+  models: {
+    providers: {
+      "ollama-oai": {
+        baseUrl: "http://127.0.0.1:11434/v1",
+        apiKey: "ollama-local",
+        api: "openai-completions",
+        models: [{ id: "qwen3:30b-a3b", name: "Qwen3 30B-A3B" }]
       }
     }
   }
