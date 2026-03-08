@@ -1,0 +1,116 @@
+{
+  "meta": {
+    "lastTouchedVersion": "2026.1.29"
+  },
+
+  "gateway": {
+    "port": 18789,
+    "host": "127.0.0.1",
+    "mode": "local",
+    "auth": {
+      "enabled": true,
+      "token": "GENERATE_WITH_openssl_rand_-hex_32"
+    },
+    "controlUi": {
+      "enabled": true,
+      "allowedOrigins": ["http://127.0.0.1:18789"],
+      "dangerouslyAllowHostHeaderOriginFallback": false
+    },
+    "trustedProxies": []
+  },
+
+  "env": {
+    "OPENROUTER_API_KEY": "${OPENROUTER_API_KEY}"
+  },
+
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "openrouter/minimax/minimax-m2",
+        "heartbeat": "openrouter/google/gemini-2.5-flash-lite",
+        "fallbacks": ["openrouter/google/gemini-2.5-flash-lite"]
+      },
+      "sandbox": {
+        "enabled": true,
+        "workspaceAccess": "workspace-only",
+        "filesystemScope": "~/.openclaw/workspace"
+      },
+      "tools": {
+        "profile": "messaging",
+        "allowlist": [
+          "reminders",
+          "calendar",
+          "imessage_send",
+          "gmail_read",
+          "imap_read",
+          "memory_read",
+          "memory_write"
+        ],
+        "denylist": [
+          "exec",
+          "shell",
+          "browser",
+          "web_fetch",
+          "web_search",
+          "file_write_outside_workspace"
+        ],
+        "requireApproval": [
+          "gmail_send",
+          "imessage_send",
+          "calendar_create",
+          "reminders_create",
+          "file_delete",
+          "any_write_action"
+        ]
+      },
+      "verbose": false,
+      "reasoning": false
+    }
+  },
+
+  "channels": {
+    "imessage": {
+      "enabled": true,
+      "cliPath": "/usr/local/bin/imsg",
+      "dbPath": "/Users/openclaw/Library/Messages/chat.db",
+      "allowFrom": [
+        "YOUR_PERSONAL_PHONE_NUMBER",
+        "YOUR_PERSONAL_APPLE_ID_EMAIL"
+      ],
+      "groupPolicy": "deny"
+    },
+    "telegram": {
+      "enabled": true,
+      "token": "${TELEGRAM_BOT_TOKEN}",
+      "allowFrom": ["YOUR_TELEGRAM_NUMERIC_USER_ID"],
+      "groups": {
+        "*": { "requireMention": true }
+      }
+    }
+  },
+
+  "sessions": {
+    "transcriptRetention": "7d",
+    "scope": "per-channel-peer",
+    "workspaceAccess": "none"
+  },
+
+  "heartbeat": {
+    "enabled": true,
+    "intervalMinutes": 60,
+    "model": "openrouter/google/gemini-2.5-flash-lite"
+  },
+
+  "memory": {
+    "enabled": true,
+    "flushThresholdTokens": 40000,
+    "flushModel": "openrouter/google/gemini-2.5-flash-lite",
+    "indexing": false
+  },
+
+  "security": {
+    "auditOnStart": true,
+    "rejectUnknownSenders": true,
+    "sanitizeExternalContent": true
+  }
+}
