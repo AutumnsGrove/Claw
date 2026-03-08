@@ -22,7 +22,7 @@ Claw/
 |-----------|--------|
 | Platform | OpenClaw (Node.js) |
 | Hardware | Mac Mini M4 32GB |
-| Primary model | MiniMax M2 via OpenRouter |
+| Primary model | MiniMax M2.5 via OpenRouter |
 | Heartbeat/fallback | Gemini 2.5 Flash Lite via OpenRouter |
 | Channels | iMessage, Telegram |
 | Skills | Apple Reminders, Apple Calendar |

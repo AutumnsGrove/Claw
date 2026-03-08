@@ -12,7 +12,7 @@ Claw is a personal OpenClaw agent setup — configuration, personality (SOUL.md)
 
 - **Platform**: OpenClaw (Node.js-based personal AI agent)
 - **Hardware**: Mac Mini M4 32GB
-- **Models**: MiniMax M2 (primary), Gemini 2.5 Flash Lite (heartbeat/fallback) via OpenRouter
+- **Models**: MiniMax M2.5 (primary), Gemini 2.5 Flash Lite (heartbeat/fallback) via OpenRouter
 - **Channels**: iMessage, Telegram
 - **Skills**: Apple Reminders, Apple Calendar
 - **OS**: macOS (dedicated `openclaw` Standard user)

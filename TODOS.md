@@ -1,40 +1,45 @@
 # TODOs — Claw
 
-## Phase 0: Pre-Install (Before Touching the Mac Mini)
+## Phase 0: Pre-Install (Done Before Mac Mini)
 - [x] Write SOUL.md agent personality
 - [x] Write security hardening guide
 - [x] Scaffold project structure
-- [ ] Review SOUL.md for any missing priority rules or edge cases
-- [ ] Finalize model choice (MiniMax M2 vs alternatives) — test prompt injection resistance
+- [x] Add quiet hours (11 PM – 8 AM, queue everything)
+- [x] Add memory system spec (bills, contacts, preferences, Grove, job search, medical)
+- [x] Clarify communication channels (iMessage outbound to me only, Telegram reply-only)
+- [x] Clarify Arturo handling (trusted contact, surface in briefings, no replies)
+- [x] Add error handling rules (retry once, then alert)
+- [x] Add "unsure priority" default rule
+- [x] Fix model name to MiniMax M2.5
+- [x] Create deploy.sh install script
+- [x] Extract openclaw.json.example to config/
 
-## Phase 1-2: Install & Filesystem Hardening
-- [ ] Create dedicated `openclaw` macOS user on Mac Mini
-- [ ] Install OpenClaw (verify version >= 2026.1.29)
-- [ ] Lock down `~/.openclaw/` permissions (700/600)
-- [ ] Store OpenRouter key in macOS Keychain (not plaintext)
-
-## Phase 3: Config Deployment
-- [ ] Copy `config/openclaw.json.example` to `~/.openclaw/openclaw.json`
-- [ ] Generate gateway auth token (`openssl rand -hex 32`)
-- [ ] Fill in real values (phone number, Apple ID, Telegram ID)
-- [ ] Deploy `SOUL.md` to `~/.openclaw/workspace/`
-
-## Phase 4: Skills
-- [ ] Install `apple-reminders` and `apple-calendar` skills
-- [ ] Audit each skill source before installing
-
-## Phase 5-6: Prompt Injection Defense & LaunchAgent
-- [ ] Verify email content is treated as untrusted (test with fake injection)
-- [ ] Set up LaunchAgent plist for auto-start
+## On the Mac Mini (Requires Hardware)
+- [ ] Run Phase 0 pre-install checklist (UPnP, firewall, FileVault)
+- [ ] Create dedicated `openclaw` macOS user (Standard, not Admin)
+- [ ] Run `bash deploy.sh` on the openclaw user
+- [ ] Fill in openclaw.json placeholders (phone number, Apple ID, Telegram ID)
+- [ ] Store OpenRouter key in macOS Keychain
+- [ ] Store Telegram bot token in macOS Keychain
+- [ ] Create OpenRouter sub-key with $20/mo cap
+- [ ] Run `openclaw doctor --fix` and `openclaw security audit --deep`
+- [ ] Load LaunchAgent and verify localhost-only binding
+- [ ] Grant macOS permissions (Full Disk, Messages, Contacts, Calendar, Reminders)
 - [ ] Configure energy settings (prevent sleep, auto-restart after power failure)
 
-## Phase 7: Cost Safety
-- [ ] Create OpenRouter sub-key with $20/mo cap
-- [ ] Verify sub-key is the one in config (not root key)
+## Post-Deploy Testing
+- [ ] Send test iMessage to verify agent receives it
+- [ ] Verify daily briefing arrives at 9 AM
+- [ ] Verify quiet hours work (no alerts between 11 PM – 8 AM)
+- [ ] Test prompt injection with fake malicious email content
+- [ ] Verify agent does NOT reply to Arturo or any contact
+- [ ] Verify Telegram reply-only behavior
+- [ ] Test financial alert flow (reminder + calendar + iMessage)
+- [ ] Test error handling (what happens when model request fails)
+- [ ] Check memory persistence across sessions
 
-## Phase 8-9: Permissions & Ongoing
-- [ ] Grant macOS permissions (Full Disk Access, Messages, Contacts, Calendar, Reminders)
-- [ ] Deny Screen Recording, Location, Camera/Mic
-- [ ] Run `openclaw doctor --fix` and `openclaw security audit --deep`
-- [ ] Verify gateway only on 127.0.0.1 (`netstat -an | grep 18789`)
-- [ ] Set monthly security review reminder
+## Future
+- [ ] Write prompt injection test suite (fake emails with SYSTEM: instructions)
+- [ ] Set up monthly security review reminder
+- [ ] Evaluate MiniMax M2.5 prompt injection resistance with real email flow
+- [ ] Document memory system patterns once live (what it remembers well, what it misses)

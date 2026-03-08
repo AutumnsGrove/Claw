@@ -108,7 +108,7 @@ This is your full hardened starting configuration. Replace placeholder values wi
   "agents": {
     "defaults": {
       "model": {
-        "primary": "openrouter/minimax/minimax-m2",
+        "primary": "openrouter/minimax/minimax-m2.5",
         "heartbeat": "openrouter/google/gemini-2.5-flash-lite",
         "fallbacks": ["openrouter/google/gemini-2.5-flash-lite"]
       },
@@ -383,7 +383,7 @@ netstat -an | grep 18789
 
 | Role | Model | Via |
 |---|---|---|
-| Primary agent | `minimax/minimax-m2` | OpenRouter |
+| Primary agent | `minimax/minimax-m2.5` | OpenRouter |
 | Heartbeats | `google/gemini-2.5-flash-lite` | OpenRouter |
 | Fallback / flush | `google/gemini-2.5-flash-lite` | OpenRouter |
 
