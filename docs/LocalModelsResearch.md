@@ -1,6 +1,6 @@
 # Local Models Research for OpenClaw on Mac Mini M4 (32GB)
 
-> Research date: 2026-03-08
+> Research date: 2026-03-09 (updated: LM Studio replaces Ollama as serving backend)
 > Goal: Privacy-preserving local inference for email/message processing
 
 ---
@@ -15,46 +15,71 @@
 | **Fallback** | Qwen3.5-9B | ~6.6 GB | Best small model for its size, multimodal, great for light tasks |
 | **Ultralight** | LFM2.5-1.2B-Instruct | ~0.7 GB | Fastest possible, good tool calling at 1B scale, RL-trained |
 
-**Serving:** Ollama (simplest, official OpenClaw integration since Feb 2026)
+**Serving:** LM Studio (MLX backend for fastest Apple Silicon inference, OpenAI-compatible API, GUI + headless modes)
 
 ---
 
 ## 1. OpenClaw Local Model Support
 
-OpenClaw natively supports local models. No hacks needed.
+OpenClaw natively supports local models via any OpenAI-compatible API server. We're using **LM Studio** as the serving backend.
 
-### How It Works
+### Why LM Studio
 
-- OpenClaw has a **native Ollama integration** documented at [docs.openclaw.ai/providers/ollama](https://docs.openclaw.ai/providers/ollama)
-- Ollama announced official OpenClaw integration on **February 1, 2026** with `ollama launch openclaw`
-- Model references use the format: `ollama/<model-name>` (e.g., `ollama/qwen3:30b-a3b`)
-- Auto-discovery: set `OLLAMA_API_KEY="ollama-local"` and OpenClaw finds tool-capable models automatically
+- **MLX backend** on Apple Silicon — 20-30% faster than llama.cpp alternatives
+- **OpenAI-compatible API** at `http://localhost:1234/v1` — drop-in for OpenClaw
+- **GUI + CLI + headless** — browse/download models visually, automate with `lms` CLI, or run headless via `llmster` daemon
+- **JIT model loading** — models auto-load on first API request, auto-unload after inactivity
+- **Tool/function calling** — supports OpenAI-format tool calls via `/v1/chat/completions` and `/v1/responses`
+- **Dual backend** — MLX (fastest on Apple Silicon) and llama.cpp (GGUF), can mix and match
+- Docs: [lmstudio.ai/docs](https://lmstudio.ai/docs/app) | [Developer API](https://lmstudio.ai/docs/developer/rest) | [Tool Use](https://lmstudio.ai/docs/developer/openai-compat/tools)
 
-### Configuration
+### LM Studio API Details
 
-Three setup methods (simplest first):
+| Endpoint | Method | Purpose |
+|----------|--------|---------|
+| `/v1/models` | GET | List loaded models |
+| `/v1/chat/completions` | POST | Chat with tool calling support |
+| `/v1/responses` | POST | Stateful interactions (v0.3.29+) |
+| `/v1/embeddings` | POST | Generate embeddings |
+| `/v1/completions` | POST | Legacy text completion |
 
-**Method 1 — Environment Variable (auto-discovery):**
-```bash
-export OLLAMA_API_KEY="ollama-local"
-# OpenClaw auto-discovers tool-capable models from http://127.0.0.1:11434
-```
+- **Default port:** 1234 (configurable)
+- **API key:** `"lm-studio"` (dummy — no real key required unless you enable auth)
+- **Streaming:** Supported via SSE (`stream: true`)
+- **Auth tokens:** Optional, configurable in Developer > Server Settings (v0.4.0+)
 
-**Method 2 — Native Ollama provider in `openclaw.json`:**
+### OpenClaw Configuration
 
-> **IMPORTANT:** For native Ollama integration, do NOT use `/v1` suffix on the URL.
-> Use `http://127.0.0.1:11434` (not `http://127.0.0.1:11434/v1`) — the `/v1` path breaks tool calling.
+LM Studio connects to OpenClaw as a custom provider using the OpenAI-compatible API:
 
 ```json5
 {
   models: {
+    mode: "merge",  // keeps cloud providers available as fallback
     providers: {
-      ollama: {
-        baseUrl: "http://127.0.0.1:11434",
-        apiKey: "ollama-local",
+      lmstudio: {
+        baseUrl: "http://127.0.0.1:1234/v1",
+        apiKey: "lm-studio",
+        api: "openai-responses",
         models: [
-          { id: "qwen3:30b-a3b", name: "Qwen3 30B-A3B" },
-          { id: "qwen3.5:9b", name: "Qwen3.5 9B" }
+          {
+            id: "qwen3-30b-a3b",        // must match model ID from /v1/models
+            name: "Qwen3 30B-A3B",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 32768,
+            maxTokens: 8192
+          },
+          {
+            id: "qwen3.5-9b",
+            name: "Qwen3.5 9B",
+            reasoning: false,
+            input: ["text"],
+            cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+            contextWindow: 32768,
+            maxTokens: 8192
+          }
         ]
       }
     }
@@ -62,8 +87,8 @@ export OLLAMA_API_KEY="ollama-local"
   agents: {
     defaults: {
       model: {
-        primary: "ollama/qwen3:30b-a3b",
-        heartbeat: "ollama/qwen3.5:9b",
+        primary: "lmstudio/qwen3-30b-a3b",
+        heartbeat: "lmstudio/qwen3.5-9b",
         fallbacks: ["openrouter/google/gemini-2.5-flash-lite"]
       }
     }
@@ -71,21 +96,38 @@ export OLLAMA_API_KEY="ollama-local"
 }
 ```
 
-**Method 3 — OpenAI-compatible mode** (if native mode has issues):
-```json5
-{
-  models: {
-    providers: {
-      "ollama-oai": {
-        baseUrl: "http://127.0.0.1:11434/v1",
-        apiKey: "ollama-local",
-        api: "openai-completions",
-        models: [{ id: "qwen3:30b-a3b", name: "Qwen3 30B-A3B" }]
-      }
-    }
-  }
-}
+> **Note:** The `"mode": "merge"` keeps paid/cloud providers active alongside LM Studio.
+> The `cost` block at all zeros tells OpenClaw this model is free, affecting routing priority.
+> Verify your model IDs match what `curl http://localhost:1234/v1/models` returns.
+
+### LM Studio CLI (`lms`)
+
+```bash
+lms status              # Check LM Studio status
+lms server start        # Start the API server
+lms server stop         # Stop the API server
+lms ls                  # List downloaded models
+lms ps                  # List loaded models (in memory)
+lms load <model> -y     # Load model with max GPU acceleration
+lms unload --all        # Unload all models
+lms get <user/repo>     # Download model from Hugging Face
+lms get <repo>@Q4_K_M   # Download specific quantization
 ```
+
+Install CLI: `npx lmstudio install-cli` (if `lms` not in PATH)
+
+### Headless Mode (`llmster`)
+
+For running LM Studio without the GUI (e.g., as a background service on the Mac Mini):
+
+```bash
+lms daemon up           # Start headless daemon
+lms get <model>         # Download model
+lms server start        # Start API server
+```
+
+Can be configured as a **macOS launch agent** or **Linux systemd service** to auto-start on login.
+JIT loading means you don't need to pre-load models — they load on first API request.
 
 ### Hybrid Setup (Recommended)
 
@@ -198,21 +240,24 @@ LFM2/2.5 use special tokens for tool calling:
 
 ## 4. Serving Options for Mac Mini M4
 
-### Recommendation: Ollama
+### Recommendation: LM Studio
 
 | Framework | OpenClaw Integration | Ease of Setup | Performance | Apple Silicon |
 |-----------|---------------------|---------------|-------------|---------------|
-| **Ollama** | Native (Feb 2026) | Easiest | Good | Full Metal support |
-| LM Studio | Via OpenAI API | Easy | Good | Full Metal support |
+| **LM Studio** | Via OpenAI API | Easy (GUI + CLI) | Best (MLX) | MLX + Metal native |
+| Ollama | Native (Feb 2026) | Easiest | Good | Full Metal support |
 | llama.cpp | Via API server | Moderate | Best (raw) | Full Metal support |
-| MLX | Manual | Moderate | Best for Apple | Native Apple framework |
+| MLX (direct) | Manual | Moderate | Best for Apple | Native Apple framework |
 
-**Ollama wins** for this use case because:
-1. Official OpenClaw integration (`ollama launch openclaw`)
-2. OpenAI-compatible API out of the box
-3. Automatic model management (pull, quantize, serve)
-4. Runs as a background service
-5. Full Apple Silicon Metal acceleration
+**LM Studio wins** for this use case because:
+1. **MLX backend** — 20-30% faster inference than llama.cpp on Apple Silicon
+2. **GUI for model management** — browse, download, test models visually before committing
+3. **OpenAI-compatible API** at `localhost:1234/v1` — works with OpenClaw out of the box
+4. **Headless mode** (`llmster`) — run as a daemon without GUI, auto-start on login
+5. **JIT model loading** — models load automatically on first API request
+6. **Dual backend** — MLX for speed, llama.cpp for GGUF compatibility, can mix both
+7. **Tool calling support** — OpenAI-format function calling through the API
+8. **CLI (`lms`)** — full model management, server control, and downloads from terminal
 
 ### Performance on 32GB Mac Mini M4
 
@@ -238,9 +283,9 @@ LFM2/2.5 use special tokens for tool calling:
 ```json
 {
   "model": {
-    "primary": "ollama/qwen3:30b-a3b-q4_K_M",
-    "heartbeat": "ollama/lfm2.5:1.2b-instruct",
-    "fallbacks": ["ollama/qwen3.5:9b"]
+    "primary": "lmstudio/qwen3-30b-a3b",
+    "heartbeat": "lmstudio/lfm2.5-1.2b-instruct",
+    "fallbacks": ["lmstudio/qwen3.5-9b"]
   }
 }
 ```
@@ -253,10 +298,10 @@ LFM2/2.5 use special tokens for tool calling:
 ```json
 {
   "model": {
-    "primary": "ollama/qwen3:30b-a3b-q4_K_M",
-    "heartbeat": "ollama/lfm2.5:1.2b-instruct",
+    "primary": "lmstudio/qwen3-30b-a3b",
+    "heartbeat": "lmstudio/lfm2.5-1.2b-instruct",
     "fallbacks": [
-      "ollama/qwen3.5:9b",
+      "lmstudio/qwen3.5-9b",
       "openrouter/google/gemini-2.5-flash-lite"
     ]
   }
@@ -271,9 +316,9 @@ LFM2/2.5 use special tokens for tool calling:
 ```json
 {
   "model": {
-    "primary": "ollama/lfm2-24b-a2b-q4_K_M",
-    "heartbeat": "ollama/lfm2.5:1.2b-instruct",
-    "fallbacks": ["ollama/qwen3:30b-a3b-q4_K_M"]
+    "primary": "lmstudio/lfm2-24b-a2b",
+    "heartbeat": "lmstudio/lfm2.5-1.2b-instruct",
+    "fallbacks": ["lmstudio/qwen3-30b-a3b"]
   }
 }
 ```
@@ -285,27 +330,73 @@ LFM2/2.5 use special tokens for tool calling:
 
 ## 6. Installation Steps
 
+### Install LM Studio
+
 ```bash
-# 1. Install Ollama
-brew install ollama
+# Mac/Linux — one-line install
+curl -fsSL https://lmstudio.ai/install.sh | bash
 
-# 2. Start Ollama service
-ollama serve
+# Or download from https://lmstudio.ai/ (GUI installer)
+```
 
-# 3. Pull recommended models
-ollama pull qwen3:30b-a3b          # Primary (~16GB)
-ollama pull qwen3.5:9b             # Fallback (~6.6GB)
+### Download Models
+
+**Option 1 — GUI:** Open LM Studio > Discover tab > search and download models. LM Studio shows RAM estimates and recommends quantizations for your hardware.
+
+**Option 2 — CLI:**
+```bash
+# Install CLI if needed
+npx lmstudio install-cli
+
+# Download recommended models
+lms get qwen/qwen3-30b-a3b-gguf@Q4_K_M     # Primary (~16GB)
+lms get qwen/qwen3.5-9b-gguf@Q4_K_M         # Fallback (~6.6GB)
 
 # For LFM2 option:
-ollama pull lfm2:24b-a2b           # Primary (~14.4GB)
-ollama pull lfm2.5:1.2b-instruct   # Heartbeat (~700MB)
-
-# 4. Verify
-ollama list
-curl http://localhost:11434/v1/models
-
-# 5. Update openclaw.json with local provider config
+lms get LiquidAI/LFM2-24B-A2B-GGUF          # Primary (~14.4GB)
+lms get LiquidAI/LFM2.5-1.2B-Instruct       # Heartbeat (~700MB)
 ```
+
+### Start the Server
+
+```bash
+# GUI: Developer tab > toggle "Start Server"
+# CLI:
+lms server start
+
+# Verify
+curl http://localhost:1234/v1/models
+```
+
+### Configure OpenClaw
+
+Update `~/.openclaw/openclaw.json` with the LM Studio provider config from Section 1.
+
+```bash
+# Verify OpenClaw can reach LM Studio
+openclaw models status
+```
+
+### Optional: Headless Auto-Start
+
+For running as a background service on the Mac Mini (no GUI needed):
+
+```bash
+# Start daemon
+lms daemon up
+lms server start
+
+# Or set up as a macOS launch agent for auto-start on login
+# See: https://lmstudio.ai/docs/developer/core/headless
+```
+
+### Performance Tips
+
+- Use **MLX format** models when available (fastest on Apple Silicon)
+- For GGUF models, LM Studio's MLX backend reads Q4_0, Q4_1, Q8_0 directly; other quants get cast to float16
+- **Q4_K_M** is the sweet spot for quality/size ratio
+- Keep models loaded — cold-load adds startup latency (or use JIT loading)
+- Set context window to 32K-64K for best memory/performance balance
 
 ---
 
@@ -322,8 +413,8 @@ The MoE models (Qwen3-30B-A3B, LFM2-24B-A2B) are excellent choices because they 
 
 ### Privacy Gains Over Current Setup
 
-| Current (OpenRouter) | Local (Ollama) |
-|-----------------------|----------------|
+| Current (OpenRouter) | Local (LM Studio) |
+|-----------------------|--------------------|
 | Email content sent to MiniMax servers | Email content never leaves Mac Mini |
 | Text messages routed through API | Messages processed entirely on-device |
 | Zero-data-retention policy (trust-based) | Physically impossible to leak (no network) |
@@ -339,12 +430,29 @@ The MoE models (Qwen3-30B-A3B, LFM2-24B-A2B) are excellent choices because they 
 
 ## Sources
 
+### LM Studio
+- [LM Studio Docs](https://lmstudio.ai/docs/app)
+- [LM Studio Developer Docs](https://lmstudio.ai/docs/developer)
+- [LM Studio REST API](https://lmstudio.ai/docs/developer/rest)
+- [LM Studio OpenAI Compatibility](https://lmstudio.ai/docs/developer/openai-compat)
+- [LM Studio Tool Use / Function Calling](https://lmstudio.ai/docs/developer/openai-compat/tools)
+- [LM Studio CLI](https://lmstudio.ai/docs/cli)
+- [LM Studio Headless Mode](https://lmstudio.ai/docs/developer/core/headless)
+- [LM Studio Python SDK](https://lmstudio.ai/docs/python)
+- [LM Studio API Changelog](https://lmstudio.ai/docs/developer/api-changelog)
+- [LM Studio MLX Engine (GitHub)](https://github.com/lmstudio-ai/mlx-engine)
+
+### OpenClaw
+- [OpenClaw Model Providers Docs](https://docs.openclaw.ai/concepts/model-providers)
+- [OpenClaw Local Models Guide](https://docs.openclaw.ai/gateway/local-models)
+- [OpenClaw + LM Studio Setup (Medium)](https://nwosunneoma.medium.com/how-to-setup-openclaw-with-lmstudio-1960a8046f6b)
+- [OpenClaw Custom Model Config](https://blog.laozhang.ai/en/posts/openclaw-custom-model)
+
+### Models
 - [Qwen3 GitHub](https://github.com/QwenLM/Qwen3)
 - [Qwen3.5 GitHub](https://github.com/QwenLM/Qwen3.5)
 - [Qwen Function Calling Docs](https://qwen.readthedocs.io/en/latest/framework/function_call.html)
 - [Qwen-Agent Framework](https://github.com/QwenLM/Qwen-Agent)
-- [Qwen3 on Ollama](https://ollama.com/library/qwen3)
-- [Qwen3.5 on Ollama](https://ollama.com/library/qwen3.5)
 - [Qwen3-Coder-Next GGUF (Unsloth)](https://huggingface.co/unsloth/Qwen3-Coder-Next-GGUF)
 - [Qwen3-Coder-Next Hardware Requirements](https://www.hardware-corner.net/qwen3-coder-next-hardware-requirements/)
 - [LFM2 Blog Post](https://www.liquid.ai/blog/liquid-foundation-models-v2-our-second-series-of-generative-ai-models)
@@ -352,7 +460,3 @@ The MoE models (Qwen3-30B-A3B, LFM2-24B-A2B) are excellent choices because they 
 - [LFM2-24B-A2B GGUF on Hugging Face](https://huggingface.co/LiquidAI/LFM2-24B-A2B-GGUF)
 - [LFM2.5-1.2B-Instruct on Hugging Face](https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct)
 - [Liquid AI Tool Use Docs](https://docs.liquid.ai/lfm/key-concepts/tool-use)
-- [OpenClaw + Ollama Integration (Ollama Blog)](https://ollama.com/blog/openclaw)
-- [OpenClaw Model Providers Docs](https://docs.openclaw.ai/concepts/model-providers)
-- [Best Ollama Models for OpenClaw 2026](https://clawdbook.org/blog/openclaw-best-ollama-models-2026)
-- [OpenClaw + Qwen 3.5 + Ollama Tutorial](https://atalupadhyay.wordpress.com/2026/03/01/build-your-own-free-personal-ai-agent-using-qwen-3-5-ollama-openclaw/)
