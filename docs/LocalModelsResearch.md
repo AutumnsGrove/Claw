@@ -60,7 +60,7 @@ LM Studio connects to OpenClaw as a custom provider using the OpenAI-compatible 
       lmstudio: {
         baseUrl: "http://127.0.0.1:1234/v1",
         apiKey: "lm-studio",
-        api: "openai-responses",
+        api: "openai-completions",  // NOT "openai-responses" — known bug (openclaw#1695)
         models: [
           {
             id: "qwen3-30b-a3b",        // must match model ID from /v1/models
@@ -96,9 +96,13 @@ LM Studio connects to OpenClaw as a custom provider using the OpenAI-compatible 
 }
 ```
 
-> **Note:** The `"mode": "merge"` keeps paid/cloud providers active alongside LM Studio.
-> The `cost` block at all zeros tells OpenClaw this model is free, affecting routing priority.
-> Verify your model IDs match what `curl http://localhost:1234/v1/models` returns.
+> **Notes:**
+> - `"mode": "merge"` keeps paid/cloud providers active alongside LM Studio.
+> - `cost` block at all zeros tells OpenClaw this model is free, affecting routing priority.
+> - Use `"api": "openai-completions"`, NOT `"openai-responses"` — there's a [known bug](https://github.com/openclaw/openclaw/issues/1695) where the API type arrives as `undefined` with the responses variant.
+> - Set `"reasoning": false` — setting it to `true` causes OpenClaw to send "developer" role messages, which most local models don't support.
+> - Verify your model IDs match what `curl http://localhost:1234/v1/models` returns.
+> - Run `openclaw doctor` to verify connectivity and config after setup.
 
 ### LM Studio CLI (`lms`)
 
@@ -265,6 +269,9 @@ LFM2/2.5 use special tokens for tool calling:
 - Practical limit: ~20-22GB for model weights, leaving room for OS + context
 - MoE models are ideal: only active parameters need compute, total params just need storage
 - Expected speeds: 15-30 tok/s for 3B active MoE models, 8-15 tok/s for 8-9B dense models
+- **MLX vs llama.cpp**: MLX is 21-87% faster on Apple Silicon with zero-copy unified memory access
+- **Memory bandwidth is the bottleneck** — determines token generation speed, not compute
+- **GPU offloading is automatic** on Mac with MLX (unified memory, no manual layer config needed)
 
 ### Model Size Guide for 32GB
 
@@ -441,12 +448,16 @@ The MoE models (Qwen3-30B-A3B, LFM2-24B-A2B) are excellent choices because they 
 - [LM Studio Python SDK](https://lmstudio.ai/docs/python)
 - [LM Studio API Changelog](https://lmstudio.ai/docs/developer/api-changelog)
 - [LM Studio MLX Engine (GitHub)](https://github.com/lmstudio-ai/mlx-engine)
+- [LM Studio Server Settings](https://lmstudio.ai/docs/developer/core/server/settings)
+- [LM Studio v0.3.6 — Tool Calling](https://lmstudio.ai/blog/lmstudio-v0.3.6)
+- [LM Studio v0.4.0 — llmster Daemon](https://lmstudio.ai/blog/0.4.0)
 
 ### OpenClaw
 - [OpenClaw Model Providers Docs](https://docs.openclaw.ai/concepts/model-providers)
 - [OpenClaw Local Models Guide](https://docs.openclaw.ai/gateway/local-models)
 - [OpenClaw + LM Studio Setup (Medium)](https://nwosunneoma.medium.com/how-to-setup-openclaw-with-lmstudio-1960a8046f6b)
 - [OpenClaw Custom Model Config](https://blog.laozhang.ai/en/posts/openclaw-custom-model)
+- [OpenClaw + LM Studio Bug #1695](https://github.com/openclaw/openclaw/issues/1695)
 
 ### Models
 - [Qwen3 GitHub](https://github.com/QwenLM/Qwen3)
